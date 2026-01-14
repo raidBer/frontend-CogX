@@ -25,12 +25,12 @@ export default function LobbyDetailsPage() {
   const router = useRouter();
 
   useEffect(() => {
-    console.log("🔄 Lobby page useEffect triggered", { 
-      hasPlayer: !!player, 
-      lobbyId, 
+    console.log("🔄 Lobby page useEffect triggered", {
+      hasPlayer: !!player,
+      lobbyId,
       activeGame,
       playerPseudo: player?.pseudo,
-      hasJoinedViaLink 
+      hasJoinedViaLink,
     });
 
     if (!player || !lobbyId) {
@@ -50,7 +50,10 @@ export default function LobbyDetailsPage() {
 
     // If there's an active game for a different lobby, clear it (only once)
     if (activeGame && activeGame.lobbyId !== lobbyId && !hasJoinedViaLink) {
-      console.log("🧹 Clearing active game from different lobby:", activeGame.lobbyId);
+      console.log(
+        "🧹 Clearing active game from different lobby:",
+        activeGame.lobbyId
+      );
       setActiveGame(null);
       setHasJoinedViaLink(true); // Prevent re-running after clearing
       return; // Let the effect re-run after state update
@@ -131,7 +134,7 @@ export default function LobbyDetailsPage() {
       hubConnection.on("LobbyClosed", (data: { reason: string }) => {
         if (lobbyClosedShown) return; // Prevent duplicate alerts
         setLobbyClosedShown(true);
-        
+
         console.log("Lobby closed:", data);
         // Clean up connection
         if (connection) {
@@ -145,7 +148,7 @@ export default function LobbyDetailsPage() {
       hubConnection.on("LobbyDeleted", (data: any) => {
         if (lobbyClosedShown) return; // Prevent duplicate alerts
         setLobbyClosedShown(true);
-        
+
         const reason = data?.reason || "The lobby was deleted";
         console.log("Lobby deleted:", reason);
         // Clean up connection
@@ -169,20 +172,25 @@ export default function LobbyDetailsPage() {
   const fetchLobbyDetails = async () => {
     if (!player) return;
 
-    console.log("🔍 Fetching lobby details for:", lobbyId, "Player:", player.pseudo);
+    console.log(
+      "🔍 Fetching lobby details for:",
+      lobbyId,
+      "Player:",
+      player.pseudo
+    );
     setLoading(true);
     setError(""); // Clear any previous errors
-    
+
     try {
       // First, try to get lobby details to see if we're already in it
       console.log("📋 Getting current lobby state...");
       let data = await lobbyService.getLobbyDetails(lobbyId, player.id);
       console.log("✅ Lobby details received:", data);
-      
+
       // Check if player is already in the lobby
       const isPlayerInLobby = data.players?.some((p) => p.id === player.id);
       console.log("Player in lobby?", isPlayerInLobby);
-      
+
       // If not in lobby, try to join
       if (!isPlayerInLobby) {
         try {
@@ -192,46 +200,58 @@ export default function LobbyDetailsPage() {
             password: null,
           });
           console.log("✅ Successfully joined lobby");
-          
+
           // Refresh lobby details after joining
           data = await lobbyService.getLobbyDetails(lobbyId, player.id);
           console.log("✅ Refreshed lobby details after join:", data);
         } catch (joinErr: any) {
           console.log("⚠️ Join attempt failed:", joinErr);
-          
+
           // Check for specific error cases
-          const errorMessage = joinErr.response?.data?.title || joinErr.message || "";
+          const errorMessage =
+            joinErr.response?.data?.title || joinErr.message || "";
           const statusCode = joinErr.response?.status;
-          
+
           console.log("Join error details:", { errorMessage, statusCode });
-          
+
           // If lobby is full
           if (errorMessage.includes("full") || statusCode === 409) {
             setError("This lobby is full. You cannot join.");
             setLoading(false);
             return;
           }
-          
+
           // If lobby requires password (private lobby)
-          if (errorMessage.includes("password") || errorMessage.includes("private")) {
+          if (
+            errorMessage.includes("password") ||
+            errorMessage.includes("private")
+          ) {
             setError("This is a private lobby. Password required.");
             setLoading(false);
             return;
           }
-          
+
           // For other errors, still show the lobby but display error
           console.error("Could not join lobby, but showing details anyway");
         }
       } else {
         console.log("✅ Player already in lobby, no need to join");
       }
-      
+
       setLobby(data);
       setIsHost(data.isHost);
-      console.log("Lobby state updated - isHost:", data.isHost, "Players:", data.players?.length);
+      console.log(
+        "Lobby state updated - isHost:",
+        data.isHost,
+        "Players:",
+        data.players?.length
+      );
       setHasJoinedViaLink(true); // Mark as processed
     } catch (err: any) {
-      const errorMsg = err.response?.data?.title || err.response?.data || "Failed to load lobby details";
+      const errorMsg =
+        err.response?.data?.title ||
+        err.response?.data ||
+        "Failed to load lobby details";
       setError(errorMsg);
       console.error("Error loading lobby:", err);
     } finally {

@@ -53,18 +53,21 @@ export default function LobbiesPage() {
 
     try {
       const allLobbies = await lobbyService.getLobbies();
-      
+
       // Check if player is in ANY lobby (as host or member)
-      const playerLobby = allLobbies.find((lobby) => 
-        lobby.hostPseudo === player.pseudo || 
-        lobby.currentPlayers > 0 // This is a simplified check
+      const playerLobby = allLobbies.find(
+        (lobby) =>
+          lobby.hostPseudo === player.pseudo || lobby.currentPlayers > 0 // This is a simplified check
       );
 
       // If player might be in a lobby, we need to check each lobby's details
       // to see if they're actually a member
       for (const lobby of allLobbies) {
         try {
-          const details = await lobbyService.getLobbyDetails(lobby.id, player.id);
+          const details = await lobbyService.getLobbyDetails(
+            lobby.id,
+            player.id
+          );
           // Check if player is in this lobby's player list
           const isInLobby = details.players?.some((p) => p.id === player.id);
           if (isInLobby) {

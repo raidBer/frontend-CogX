@@ -30,12 +30,17 @@ export default function PlayerPage() {
       if (player) {
         try {
           const allLobbies = await lobbyService.getLobbies();
-          
+
           // Check each lobby to see if player is a member
           for (const lobby of allLobbies) {
             try {
-              const details = await lobbyService.getLobbyDetails(lobby.id, player.id);
-              const isInLobby = details.players?.some((p) => p.id === player.id);
+              const details = await lobbyService.getLobbyDetails(
+                lobby.id,
+                player.id
+              );
+              const isInLobby = details.players?.some(
+                (p) => p.id === player.id
+              );
               if (isInLobby) {
                 console.log("Player is in lobby, redirecting to lobby page");
                 router.push(`/lobby/${lobby.id}`);

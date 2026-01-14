@@ -126,7 +126,7 @@ export default function Connect4Page() {
         console.log("Board from gameState:", data.gameState?.board);
         console.log("Column:", data.column, "Row:", data.row);
         console.log("PlayerId:", data.playerId, "Symbol:", data.symbol);
-        
+
         // Backend sends {column, row, symbol, playerId, gameState}
         const gameState = data.gameState || data;
 
@@ -136,7 +136,7 @@ export default function Connect4Page() {
           console.log("Setting new board:", newBoard);
           setBoard(newBoard);
         }
-        
+
         setCurrentPlayer(
           gameState.currentPlayerTurn || gameState.currentPlayerId
         );
@@ -264,13 +264,7 @@ export default function Connect4Page() {
     }
 
     try {
-      await connection.invoke(
-        "DropPiece",
-        lobbyId,
-        sessionId,
-        player.id,
-        col
-      );
+      await connection.invoke("DropPiece", lobbyId, sessionId, player.id, col);
     } catch (error) {
       console.error("Error dropping piece:", error);
     }
@@ -307,15 +301,13 @@ export default function Connect4Page() {
     // If cell contains "Red" or "Yellow" string
     else if (cellValue === "Red" || cellValue === "red") {
       displaySymbol = "🔴";
-    }
-    else if (cellValue === "Yellow" || cellValue === "yellow") {
+    } else if (cellValue === "Yellow" || cellValue === "yellow") {
       displaySymbol = "🟡";
     }
     // If cell contains number (1 or 2 for player index)
     else if (cellValue === 1 || cellValue === "1") {
       displaySymbol = "🔴";
-    }
-    else if (cellValue === 2 || cellValue === "2") {
+    } else if (cellValue === 2 || cellValue === "2") {
       displaySymbol = "🟡";
     }
     // If cell contains player ID
@@ -327,9 +319,7 @@ export default function Connect4Page() {
     }
 
     return (
-      <div
-        className="w-16 h-16 rounded-full flex items-center justify-center text-4xl border-2 border-dark-border bg-dark-surface"
-      >
+      <div className="w-16 h-16 rounded-full flex items-center justify-center text-4xl border-2 border-dark-border bg-dark-surface">
         {displaySymbol}
       </div>
     );
