@@ -19,33 +19,59 @@ export default function LobbyDetailsPage() {
   const [error, setError] = useState("");
   const [isHost, setIsHost] = useState(false);
   const [copySuccess, setCopySuccess] = useState(false);
+  const [hasJoinedViaLink, setHasJoinedViaLink] = useState(false);
+  const [lobbyClosedShown, setLobbyClosedShown] = useState(false);
   const { player, activeGame, setActiveGame } = usePlayer();
   const router = useRouter();
 
   useEffect(() => {
+    console.log("🔄 Lobby page useEffect triggered", { 
+      hasPlayer: !!player, 
+      lobbyId, 
+      activeGame,
+      playerPseudo: player?.pseudo,
+      hasJoinedViaLink 
+    });
+
     if (!player || !lobbyId) {
+      console.log("❌ No player or lobbyId, redirecting to /player");
       router.push("/player");
       return;
     }
 
-    // Redirect to active game if one exists
-    if (activeGame) {
+    // Redirect to active game if one exists AND it matches this lobby
+    if (activeGame && activeGame.lobbyId === lobbyId) {
+      console.log("🎮 Redirecting to active game for this lobby");
       router.push(
         `/game/${activeGame.gameType}?session=${activeGame.sessionId}&lobby=${activeGame.lobbyId}`
       );
       return;
     }
 
-    fetchLobbyDetails();
-    setupSignalR();
+    // If there's an active game for a different lobby, clear it (only once)
+    if (activeGame && activeGame.lobbyId !== lobbyId && !hasJoinedViaLink) {
+      console.log("🧹 Clearing active game from different lobby:", activeGame.lobbyId);
+      setActiveGame(null);
+      setHasJoinedViaLink(true); // Prevent re-running after clearing
+      return; // Let the effect re-run after state update
+    }
+
+    console.log("✅ Loading lobby details and setting up SignalR");
+    if (!connection) {
+      setupSignalR();
+    }
+    if (!lobby || !hasJoinedViaLink) {
+      fetchLobbyDetails();
+    }
 
     return () => {
+      console.log("🧹 Cleanup: leaving lobby group");
       if (connection) {
         connection.invoke("LeaveLobbyGroup", lobbyId).catch(console.error);
         connection.stop();
       }
     };
-  }, [player, lobbyId]);
+  }, [player, lobbyId, activeGame, hasJoinedViaLink]);
 
   const setupSignalR = async () => {
     try {
@@ -103,7 +129,31 @@ export default function LobbyDetailsPage() {
       });
 
       hubConnection.on("LobbyClosed", (data: { reason: string }) => {
-        alert(`Lobby closed: ${data.reason}`);
+        if (lobbyClosedShown) return; // Prevent duplicate alerts
+        setLobbyClosedShown(true);
+        
+        console.log("Lobby closed:", data);
+        // Clean up connection
+        if (connection) {
+          connection.stop().catch(console.error);
+        }
+        // Show notification and redirect
+        alert(`Lobby closed: ${data.reason || "The host closed the lobby"}`);
+        router.push("/lobbies");
+      });
+
+      hubConnection.on("LobbyDeleted", (data: any) => {
+        if (lobbyClosedShown) return; // Prevent duplicate alerts
+        setLobbyClosedShown(true);
+        
+        const reason = data?.reason || "The lobby was deleted";
+        console.log("Lobby deleted:", reason);
+        // Clean up connection
+        if (connection) {
+          connection.stop().catch(console.error);
+        }
+        // Show notification and redirect
+        alert(`Lobby closed: ${reason}`);
         router.push("/lobbies");
       });
 
@@ -119,23 +169,71 @@ export default function LobbyDetailsPage() {
   const fetchLobbyDetails = async () => {
     if (!player) return;
 
+    console.log("🔍 Fetching lobby details for:", lobbyId, "Player:", player.pseudo);
     setLoading(true);
+    setError(""); // Clear any previous errors
+    
     try {
-      // Try to join the lobby (will fail if already in or lobby full, but that's ok)
-      try {
-        await lobbyService.joinLobby(lobbyId, player.id);
-      } catch (joinErr) {
-        // Ignore join errors - player might already be in lobby
-        console.log("Join attempt result:", joinErr);
+      // First, try to get lobby details to see if we're already in it
+      console.log("📋 Getting current lobby state...");
+      let data = await lobbyService.getLobbyDetails(lobbyId, player.id);
+      console.log("✅ Lobby details received:", data);
+      
+      // Check if player is already in the lobby
+      const isPlayerInLobby = data.players?.some((p) => p.id === player.id);
+      console.log("Player in lobby?", isPlayerInLobby);
+      
+      // If not in lobby, try to join
+      if (!isPlayerInLobby) {
+        try {
+          console.log("📥 Player not in lobby, attempting to join...");
+          await lobbyService.joinLobby(lobbyId, {
+            playerId: player.id,
+            password: null,
+          });
+          console.log("✅ Successfully joined lobby");
+          
+          // Refresh lobby details after joining
+          data = await lobbyService.getLobbyDetails(lobbyId, player.id);
+          console.log("✅ Refreshed lobby details after join:", data);
+        } catch (joinErr: any) {
+          console.log("⚠️ Join attempt failed:", joinErr);
+          
+          // Check for specific error cases
+          const errorMessage = joinErr.response?.data?.title || joinErr.message || "";
+          const statusCode = joinErr.response?.status;
+          
+          console.log("Join error details:", { errorMessage, statusCode });
+          
+          // If lobby is full
+          if (errorMessage.includes("full") || statusCode === 409) {
+            setError("This lobby is full. You cannot join.");
+            setLoading(false);
+            return;
+          }
+          
+          // If lobby requires password (private lobby)
+          if (errorMessage.includes("password") || errorMessage.includes("private")) {
+            setError("This is a private lobby. Password required.");
+            setLoading(false);
+            return;
+          }
+          
+          // For other errors, still show the lobby but display error
+          console.error("Could not join lobby, but showing details anyway");
+        }
+      } else {
+        console.log("✅ Player already in lobby, no need to join");
       }
-
-      // Get full details
-      const data = await lobbyService.getLobbyDetails(lobbyId, player.id);
+      
       setLobby(data);
       setIsHost(data.isHost);
-      console.log("Lobby details loaded, isHost:", data.isHost);
+      console.log("Lobby state updated - isHost:", data.isHost, "Players:", data.players?.length);
+      setHasJoinedViaLink(true); // Mark as processed
     } catch (err: any) {
-      setError(err.response?.data || "Failed to load lobby details");
+      const errorMsg = err.response?.data?.title || err.response?.data || "Failed to load lobby details";
+      setError(errorMsg);
+      console.error("Error loading lobby:", err);
     } finally {
       setLoading(false);
     }

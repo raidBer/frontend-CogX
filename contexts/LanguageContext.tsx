@@ -84,14 +84,24 @@ const translations = {
     "game.players": "Players",
     "game.notYourTurn": "Not your turn!",
     "game.cellOccupied": "Cell already occupied!",
+    "game.you": "You",
+    "game.playing": "Playing",
+    "game.forfeit": "Forfeit",
+    "game.confirmForfeit": "Are you sure you want to forfeit?",
+    "game.loading": "Loading game...",
+    "game.connect4": "Connect 4",
+    "game.howToPlay": "How to Play",
 
-    // Tic Tac Toe Instructions
+    // Game Instructions
     "game.tictactoe.instructions":
       "Classic Tic-Tac-Toe game. Get 3 in a row to win!",
     "game.speedtyping.instructions":
       "Type the text as fast and accurately as possible. Fastest wins!",
     "game.puissance4.instructions":
       "Connect 4 pieces in a row (horizontal, vertical, or diagonal) to win!",
+    "game.connect4Rule1": "Click on a column to drop your piece",
+    "game.connect4Rule2": "Connect 4 pieces horizontally, vertically, or diagonally to win",
+    "game.connect4Rule3": "Take turns with your opponent",
 
     // Leaderboard
     "leaderboard.title": "Leaderboard",
@@ -214,14 +224,24 @@ const translations = {
     "game.players": "Joueurs",
     "game.notYourTurn": "Ce n'est pas votre tour!",
     "game.cellOccupied": "Case déjà occupée!",
+    "game.you": "Vous",
+    "game.playing": "En train de jouer",
+    "game.forfeit": "Abandonner",
+    "game.confirmForfeit": "Êtes-vous sûr de vouloir abandonner?",
+    "game.loading": "Chargement du jeu...",
+    "game.connect4": "Puissance 4",
+    "game.howToPlay": "Comment Jouer",
 
-    // Tic Tac Toe Instructions
+    // Game Instructions
     "game.tictactoe.instructions":
       "Jeu classique de Morpion. Alignez 3 symboles pour gagner!",
     "game.speedtyping.instructions":
       "Tapez le texte aussi vite et précisément que possible. Le plus rapide gagne!",
     "game.puissance4.instructions":
       "Alignez 4 pièces (horizontalement, verticalement ou en diagonale) pour gagner!",
+    "game.connect4Rule1": "Cliquez sur une colonne pour y déposer votre pièce",
+    "game.connect4Rule2": "Alignez 4 pièces horizontalement, verticalement ou en diagonale pour gagner",
+    "game.connect4Rule3": "Jouez à tour de rôle avec votre adversaire",
 
     // Leaderboard
     "leaderboard.title": "Classement",

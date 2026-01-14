@@ -53,12 +53,29 @@ export default function LobbiesPage() {
 
     try {
       const allLobbies = await lobbyService.getLobbies();
-      const hostedLobby = allLobbies.find(
-        (lobby) => lobby.hostPseudo === player.pseudo
+      
+      // Check if player is in ANY lobby (as host or member)
+      const playerLobby = allLobbies.find((lobby) => 
+        lobby.hostPseudo === player.pseudo || 
+        lobby.currentPlayers > 0 // This is a simplified check
       );
 
-      if (hostedLobby) {
-        router.push(`/lobby/${hostedLobby.id}`);
+      // If player might be in a lobby, we need to check each lobby's details
+      // to see if they're actually a member
+      for (const lobby of allLobbies) {
+        try {
+          const details = await lobbyService.getLobbyDetails(lobby.id, player.id);
+          // Check if player is in this lobby's player list
+          const isInLobby = details.players?.some((p) => p.id === player.id);
+          if (isInLobby) {
+            console.log("Player found in lobby:", lobby.id, "redirecting...");
+            router.push(`/lobby/${lobby.id}`);
+            return;
+          }
+        } catch (err) {
+          // Lobby might not exist anymore or player doesn't have access
+          continue;
+        }
       }
     } catch (err) {
       console.error("Error checking existing lobby:", err);
@@ -80,9 +97,12 @@ export default function LobbiesPage() {
         });
       });
 
-      hubConnection.on("LobbyDeleted", (data: { lobbyId: string }) => {
-        console.log("Lobby deleted:", data.lobbyId);
-        setLobbies((prev) => prev.filter((l) => l.id !== data.lobbyId));
+      hubConnection.on("LobbyDeleted", (data: any) => {
+        const lobbyId = data?.lobbyId || data;
+        console.log("Lobby deleted:", lobbyId);
+        if (lobbyId) {
+          setLobbies((prev) => prev.filter((l) => l.id !== lobbyId));
+        }
       });
 
       hubConnection.on("PlayerJoined", (data: any) => {

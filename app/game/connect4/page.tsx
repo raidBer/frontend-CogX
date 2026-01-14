@@ -8,7 +8,7 @@ import { createHubConnection } from "@/lib/signalr";
 import { lobbyService } from "@/services";
 import type { HubConnection } from "@microsoft/signalr";
 
-interface TicTacToeGameState {
+interface Connect4GameState {
   gameSessionId: string;
   board: (string | null)[][];
   currentPlayerId: string;
@@ -17,7 +17,7 @@ interface TicTacToeGameState {
   winner?: string;
 }
 
-export default function TicTacToePage() {
+export default function Connect4Page() {
   const searchParams = useSearchParams();
   const sessionId = searchParams.get("session");
   const lobbyId = searchParams.get("lobby");
@@ -41,10 +41,11 @@ export default function TicTacToePage() {
     return false;
   });
 
+  // Connect 4 board: 6 rows x 7 columns
   const [board, setBoard] = useState<(string | null)[][]>(
-    Array(3)
+    Array(6)
       .fill(null)
-      .map(() => Array(3).fill(null))
+      .map(() => Array(7).fill(null))
   );
   const [currentPlayer, setCurrentPlayer] = useState<string | null>(null);
   const [connection, setConnection] = useState<HubConnection | null>(null);
@@ -76,19 +77,25 @@ export default function TicTacToePage() {
 
   const setupSignalR = async () => {
     try {
-      const hubConnection = createHubConnection("/tictactoehub");
+      const hubConnection = createHubConnection("/connect4hub");
 
-      hubConnection.on("TicTacToeInitialized", (gameState: any) => {
-        console.log("Game initialized:", gameState);
+      // Log all incoming events for debugging
+      hubConnection.onreconnecting(() => console.log("Reconnecting..."));
+      hubConnection.onreconnected(() => console.log("Reconnected"));
+      hubConnection.onclose(() => console.log("Connection closed"));
+
+      // Try multiple possible event names
+      hubConnection.on("Connect4Initialized", (gameState: any) => {
+        console.log("✅ Connect4Initialized event received:", gameState);
         console.log("Current player turn:", gameState.currentPlayerTurn);
         console.log("My player ID:", player?.id);
         console.log("Player1:", gameState.player1);
         console.log("Player2:", gameState.player2);
         setBoard(
           gameState.board ||
-            Array(3)
+            Array(6)
               .fill(null)
-              .map(() => Array(3).fill(null))
+              .map(() => Array(7).fill(null))
         );
         setCurrentPlayer(
           gameState.currentPlayerTurn || gameState.currentPlayerId
@@ -97,19 +104,39 @@ export default function TicTacToePage() {
         setGameInitialized(true);
       });
 
-      hubConnection.on("MoveMade", (data: any) => {
-        console.log("Move made:", data);
-        console.log("Full gameState:", data.gameState);
-        console.log("Board from gameState:", data.gameState?.board);
-        // Backend sends {row, col, symbol, playerId, gameState}
-        const gameState = data.gameState || data;
-
+      // Also listen for GameInitialized (generic name)
+      hubConnection.on("GameInitialized", (gameState: any) => {
+        console.log("✅ GameInitialized event received:", gameState);
         setBoard(
           gameState.board ||
-            Array(3)
+            Array(6)
               .fill(null)
-              .map(() => Array(3).fill(null))
+              .map(() => Array(7).fill(null))
         );
+        setCurrentPlayer(
+          gameState.currentPlayerTurn || gameState.currentPlayerId
+        );
+        setPlayers([gameState.player1, gameState.player2].filter((p) => p));
+        setGameInitialized(true);
+      });
+
+      hubConnection.on("PieceDropped", (data: any) => {
+        console.log("🔵 PieceDropped event received:", data);
+        console.log("Full gameState:", data.gameState);
+        console.log("Board from gameState:", data.gameState?.board);
+        console.log("Column:", data.column, "Row:", data.row);
+        console.log("PlayerId:", data.playerId, "Symbol:", data.symbol);
+        
+        // Backend sends {column, row, symbol, playerId, gameState}
+        const gameState = data.gameState || data;
+
+        // Create a deep copy of the board to force React re-render
+        if (gameState.board) {
+          const newBoard = gameState.board.map((row: any[]) => [...row]);
+          console.log("Setting new board:", newBoard);
+          setBoard(newBoard);
+        }
+        
         setCurrentPlayer(
           gameState.currentPlayerTurn || gameState.currentPlayerId
         );
@@ -163,7 +190,7 @@ export default function TicTacToePage() {
       });
 
       await hubConnection.start();
-      console.log("Connected to TicTacToeHub");
+      console.log("Connected to Connect4Hub");
       await hubConnection.invoke("JoinGameRoom", lobbyId);
       console.log("Joined game room");
 
@@ -224,7 +251,7 @@ export default function TicTacToePage() {
     }
   };
 
-  const handleCellClick = async (row: number, col: number) => {
+  const handleColumnClick = async (col: number) => {
     // Prevent moves after game over
     if (!connection || !player || gameOver) {
       console.log("Move blocked: game over or missing connection");
@@ -235,22 +262,17 @@ export default function TicTacToePage() {
       alert(t("game.notYourTurn"));
       return;
     }
-    if (board[row][col] !== null && board[row][col] !== "") {
-      alert(t("game.cellOccupied"));
-      return;
-    }
 
     try {
       await connection.invoke(
-        "MakeMove",
+        "DropPiece",
         lobbyId,
         sessionId,
         player.id,
-        row,
         col
       );
     } catch (error) {
-      console.error("Error making move:", error);
+      console.error("Error dropping piece:", error);
     }
   };
 
@@ -263,8 +285,8 @@ export default function TicTacToePage() {
       const player2 = players[1];
 
       // Use the symbol field from backend if available
-      if (player1?.id === playerId) return player1.symbol || "X";
-      if (player2?.id === playerId) return player2.symbol || "O";
+      if (player1?.id === playerId) return player1.symbol || "🔴";
+      if (player2?.id === playerId) return player2.symbol || "🟡";
     }
 
     return "";
@@ -275,66 +297,53 @@ export default function TicTacToePage() {
 
     // Try multiple ways to get the symbol
     let symbol = "";
+    let displaySymbol = "⚫"; // default empty cell
 
-    // If cell contains 'X' or 'O' directly
-    if (cellValue === "X" || cellValue === "O") {
+    // If cell contains emoji directly
+    if (cellValue === "🔴" || cellValue === "🟡") {
       symbol = cellValue;
+      displaySymbol = cellValue;
+    }
+    // If cell contains "Red" or "Yellow" string
+    else if (cellValue === "Red" || cellValue === "red") {
+      displaySymbol = "🔴";
+    }
+    else if (cellValue === "Yellow" || cellValue === "yellow") {
+      displaySymbol = "🟡";
+    }
+    // If cell contains number (1 or 2 for player index)
+    else if (cellValue === 1 || cellValue === "1") {
+      displaySymbol = "🔴";
+    }
+    else if (cellValue === 2 || cellValue === "2") {
+      displaySymbol = "🟡";
     }
     // If cell contains player ID
-    else if (cellValue) {
-      symbol = getPlayerSymbol(cellValue);
+    else if (cellValue && typeof cellValue === "string") {
+      const playerSymbol = getPlayerSymbol(cellValue);
+      if (playerSymbol) {
+        displaySymbol = playerSymbol;
+      }
     }
-
-    // Debug logging
-    if (cellValue) {
-      console.log(
-        `Cell [${row},${col}] value:`,
-        cellValue,
-        `symbol:`,
-        symbol,
-        `type:`,
-        typeof cellValue
-      );
-    }
-
-    const isDisabled =
-      gameOver || cellValue !== null || currentPlayer !== player?.id;
 
     return (
-      <button
-        onClick={() => handleCellClick(row, col)}
-        disabled={isDisabled}
-        className={`w-28 h-28 text-5xl font-bold border-2 rounded-lg transition-all ${
-          isDisabled
-            ? "border-dark-border bg-dark-elevated cursor-not-allowed"
-            : "border-neon-blue bg-dark-surface hover:bg-dark-elevated hover:border-neon-cyan hover:shadow-neon cursor-pointer transform hover:scale-105"
-        }`}
+      <div
+        className="w-16 h-16 rounded-full flex items-center justify-center text-4xl border-2 border-dark-border bg-dark-surface"
       >
-        <span
-          className={`${
-            symbol === "X"
-              ? "text-neon-cyan"
-              : symbol === "O"
-              ? "text-neon-purple"
-              : "text-gray-600"
-          }`}
-          style={{ textShadow: symbol ? "0 0 10px currentColor" : "none" }}
-        >
-          {symbol || "·"}
-        </span>
-      </button>
+        {displaySymbol}
+      </div>
     );
   };
 
   return (
     <div className="min-h-screen p-8 bg-dark-bg">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         <div className="text-center mb-8">
           <h1
             className="text-5xl font-bold mb-3 text-neon-cyan"
             style={{ textShadow: "0 0 30px rgba(0, 240, 255, 0.6)" }}
           >
-            {t("game.tictactoe.title")}
+            Connect 4
           </h1>
           <div className="h-1 w-32 bg-gradient-to-r from-neon-cyan to-neon-purple mx-auto rounded-full"></div>
         </div>
@@ -429,9 +438,30 @@ export default function TicTacToePage() {
 
         <div className="flex justify-center mb-8">
           <div className="inline-block bg-dark-elevated p-6 rounded-xl border-2 border-dark-border shadow-lg">
+            {/* Column click buttons */}
+            <div className="flex gap-2 mb-2">
+              {Array(7)
+                .fill(null)
+                .map((_, colIndex) => (
+                  <button
+                    key={colIndex}
+                    onClick={() => handleColumnClick(colIndex)}
+                    disabled={gameOver || currentPlayer !== player?.id}
+                    className={`w-16 h-12 rounded-lg font-bold transition-all ${
+                      gameOver || currentPlayer !== player?.id
+                        ? "bg-dark-surface border-dark-border cursor-not-allowed text-gray-600"
+                        : "bg-gradient-to-b from-neon-cyan to-neon-blue text-dark-bg hover:shadow-neon-cyan cursor-pointer transform hover:scale-105"
+                    }`}
+                  >
+                    ↓
+                  </button>
+                ))}
+            </div>
+
+            {/* Board grid */}
             {board &&
               board.map((row, rowIndex) => (
-                <div key={rowIndex} className="flex gap-2">
+                <div key={rowIndex} className="flex gap-2 mb-2">
                   {row.map((_, colIndex) => (
                     <div key={colIndex}>{renderCell(rowIndex, colIndex)}</div>
                   ))}
@@ -453,9 +483,9 @@ export default function TicTacToePage() {
                 <div className="flex items-center gap-4">
                   <div
                     className={`w-12 h-12 rounded-full flex items-center justify-center text-2xl font-bold ${
-                      getPlayerSymbol(p.id) === "X"
-                        ? "bg-gradient-to-br from-neon-cyan to-blue-500 text-dark-bg"
-                        : "bg-gradient-to-br from-neon-purple to-pink-500 text-dark-bg"
+                      getPlayerSymbol(p.id) === "🔴"
+                        ? "bg-gradient-to-br from-red-500 to-red-700 text-white"
+                        : "bg-gradient-to-br from-yellow-400 to-yellow-600 text-dark-bg"
                     }`}
                   >
                     {getPlayerSymbol(p.id)}

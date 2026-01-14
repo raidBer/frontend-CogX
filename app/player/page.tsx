@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { playerService } from "@/services";
+import { playerService, lobbyService } from "@/services";
 import { usePlayer } from "@/contexts/PlayerContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -11,9 +11,48 @@ export default function PlayerPage() {
   const [playerId, setPlayerId] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-  const { player, setPlayer } = usePlayer();
+  const { player, setPlayer, activeGame } = usePlayer();
   const { t } = useLanguage();
   const router = useRouter();
+
+  useEffect(() => {
+    const checkPlayerLobby = async () => {
+      // If player has an active game, redirect to game
+      if (activeGame) {
+        console.log("Player has active game, redirecting...");
+        router.push(
+          `/game/${activeGame.gameType}?session=${activeGame.sessionId}&lobby=${activeGame.lobbyId}`
+        );
+        return;
+      }
+
+      // If player is logged in, check if they're in a lobby
+      if (player) {
+        try {
+          const allLobbies = await lobbyService.getLobbies();
+          
+          // Check each lobby to see if player is a member
+          for (const lobby of allLobbies) {
+            try {
+              const details = await lobbyService.getLobbyDetails(lobby.id, player.id);
+              const isInLobby = details.players?.some((p) => p.id === player.id);
+              if (isInLobby) {
+                console.log("Player is in lobby, redirecting to lobby page");
+                router.push(`/lobby/${lobby.id}`);
+                return;
+              }
+            } catch (err) {
+              continue;
+            }
+          }
+        } catch (err) {
+          console.error("Error checking player lobby:", err);
+        }
+      }
+    };
+
+    checkPlayerLobby();
+  }, [player, activeGame, router]);
 
   const handleCreatePlayer = async (e: React.FormEvent) => {
     e.preventDefault();
